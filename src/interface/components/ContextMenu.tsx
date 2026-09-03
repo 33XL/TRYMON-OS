@@ -7,6 +7,7 @@ export interface ContextMenuItem {
   onClick?: () => void;
   separator?: boolean;
   danger?: boolean;
+  disabled?: boolean;
   items?: ContextMenuItem[];
 }
 
@@ -57,11 +58,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
           ) : (
             <div 
               key={`item-${index}`}
-              className={`context-menu-item ${item.danger ? 'danger' : ''} ${activeSubmenu === index ? 'active' : ''}`}
-              onMouseEnter={() => item.items && setActiveSubmenu(index)}
-              onMouseLeave={() => item.items && setActiveSubmenu(null)}
+              className={`context-menu-item ${item.danger ? 'danger' : ''} ${item.disabled ? 'disabled' : ''} ${activeSubmenu === index ? 'active' : ''}`}
+              onMouseEnter={() => !item.disabled && item.items && setActiveSubmenu(index)}
+              onMouseLeave={() => !item.disabled && item.items && setActiveSubmenu(null)}
               onClick={() => {
-                if (!item.items) {
+                if (!item.disabled && !item.items) {
                   item.onClick?.();
                   onClose();
                 }

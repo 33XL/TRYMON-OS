@@ -20,7 +20,7 @@ import EditorApp from '../abstract-software-trymon/applications-trymon/EditorApp
 import { useEmulator } from './hooks/useEmulator';
 import { useKernelState, useKernelBinaries, useTrymonApps } from './hooks/useKernelState';
 import { ContextMenu, ContextMenuItem } from './components/ContextMenu';
-import { SystemClock, NotificationCenter, ToastContainer, useNotifications } from './components/SystemComponents';
+import { SystemClock, VolumeControl, NotificationCenter, ToastContainer, useNotifications } from './components/SystemComponents';
 import TrymonLogo from './components/TrymonLogo';
 import BootScreen from './components/BootScreen';
 import { useSync } from './hooks/useSync';
@@ -1123,6 +1123,7 @@ export default function App() {
             <div className="tray-item" title={emulatorState.isRunning ? "Emulador em execução" : "Emulador parado"}>
               {emulatorState.isRunning ? <Activity size={14} className="running" /> : <Activity size={14} />}
             </div>
+            <VolumeControl />
             <SystemClock />
             <NotificationCenter
               notifications={notifications}

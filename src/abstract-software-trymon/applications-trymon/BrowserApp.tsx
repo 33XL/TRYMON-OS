@@ -388,7 +388,7 @@ function BrowserHomepage({ navigateTo, currentLayer }: { navigateTo: (url: strin
   const [query, setQuery] = useState('');
   
   const handleRecursiveNav = (url: string) => {
-    if (url.includes('trymon-binary-engine.vercel.app')) {
+    if (url.includes('trymon-os.vercel.app')) {
       if (currentLayer >= 5) {
         alert("CRITICAL ERROR: Maximum recursion depth reached (5/5). System stability at risk. Future layers blocked.");
         return;
@@ -429,7 +429,7 @@ function BrowserHomepage({ navigateTo, currentLayer }: { navigateTo: (url: strin
           { name: 'Trymon Cloud', url: 'trymon://cloud', icon: <FolderPlus size={24} color="#ffa657" />, premium: true },
           { name: 'Trymon News', url: 'trymon://social', icon: <Activity size={24} color="#7ee787" />, premium: true },
           { name: 'Trymon Docs', url: 'trymon://docs', icon: <Info size={24} />, premium: true },
-          { name: 'Trymon OS', url: 'https://trymon-binary-engine.vercel.app/', icon: <RotateCw size={24} color="#00f2ff" />, premium: true },
+          { name: 'Trymon OS', url: 'https://trymon-os.vercel.app/', icon: <RotateCw size={24} color="#00f2ff" />, premium: true },
         ].map((sc, i) => (
           <div key={i} className={`hp-shortcut ${sc.premium ? 'premium-border' : ''}`} onClick={() => handleRecursiveNav(sc.url)}>
             <div className="hp-shortcut-icon">{sc.icon}</div>
@@ -497,7 +497,7 @@ function TrymonSERP({ url, navigateTo }: { url: string; navigateTo: any }) {
   const results = [
     {
       title: 'Trymon Platform (Recursive)',
-      url: 'https://trymon-binary-engine.vercel.app/',
+      url: 'https://trymon-os.vercel.app/',
       desc: 'Acesse a instância web oficial do Trymon Engine. Perfeito para testes de recursividade e instâncias aninhadas.',
       internal: true
     },

@@ -3,7 +3,7 @@ import {
   FolderOpen, FileCode, ChevronRight, Home, 
   ArrowLeft, RefreshCw, Folder, Search, 
   Grid, List as ListIcon, Menu as MenuIcon, 
-  Monitor, FileText, Music, Video, Download, Image as ImageIcon,
+  Monitor, FileText, Music, Video, Download, Upload, Image as ImageIcon,
   FolderPlus, FilePlus, Edit3, Trash2
 } from 'lucide-react';
 import * as kernel from '../../interface/services/kernelService';
@@ -22,16 +22,15 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
   onContextMenu: (e: React.MouseEvent, items: ContextMenuItem[]) => void,
   onOpenFile?: (path: string) => void
 }) {
-  const [currentPath, setCurrentPath] = useState('/');
+  const userHome = `/home/${userName}`;
+  const [currentPath, setCurrentPath] = useState(userHome);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [files, setFiles] = useState<FileEntry[]>([]);
-  const [history, setHistory] = useState<string[]>(['/']);
+  const [history, setHistory] = useState<string[]>([userHome]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingPath, setEditingPath] = useState<string | null>(null);
-
-  const userHome = `/home/${userName}`;
 
   const loadDirectory = useCallback((path: string) => {
     console.log('[FilesApp] Loading directory:', path);
@@ -179,6 +178,52 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
     refreshView();
   };
 
+  const handleImport = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.onchange = async (e: any) => {
+      const selectedFiles = e.target.files;
+      if (!selectedFiles || selectedFiles.length === 0) return;
+
+      let processed = 0;
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const buffer = event.target?.result as ArrayBuffer;
+          const path = currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`;
+          kernel.writeBinaryFile(path, new Uint8Array(buffer));
+          
+          processed++;
+          if (processed === selectedFiles.length) {
+            refreshView();
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    };
+    input.click();
+  };
+
+  const handleExport = (entry: FileEntry) => {
+    const data = kernel.readFile(entry.path);
+    if (!data) {
+      console.error('[FilesApp] Could not read file for export:', entry.path);
+      return;
+    }
+
+    const blob = new Blob([data as any], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = entry.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const breadcrumbs = useMemo(() => {
     const parts = currentPath.split('/').filter(p => p !== '');
     const crumbs = [{ name: 'Raiz', path: '/', isRoot: true }];
@@ -215,6 +260,8 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
           onContextMenu(e, [
             { label: 'Nova Pasta', icon: <FolderPlus size={14} />, onClick: handleCreateFolder },
             { label: 'Novo Arquivo', icon: <FilePlus size={14} />, onClick: handleCreateFile },
+            { separator: true },
+            { label: 'Importar Arquivos', icon: <Upload size={14} />, onClick: handleImport },
             { separator: true },
             { label: 'Atualizar', icon: <RefreshCw size={14} />, onClick: refreshView }
           ]);
@@ -259,6 +306,10 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
             </button>
             <button className="nav-btn" onClick={handleCreateFile} title="Novo Arquivo">
               <FilePlus size={16} />
+            </button>
+            <div className="btn-sep" style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
+            <button className="nav-btn" onClick={handleImport} title="Importar do Computador">
+              <Upload size={16} />
             </button>
           </div>
         </div>
@@ -357,6 +408,7 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
                     onContextMenu(e, [
                       { label: 'Abrir', icon: f.file_type === 'Directory' ? <FolderOpen size={14} /> : <FileCode size={14} />, onClick: () => handleEntryClick(f) },
                       { label: 'Renomear', icon: <Edit3 size={14} />, onClick: () => handleRename(f) },
+                      { label: 'Exportar', icon: <Download size={14} />, onClick: () => handleExport(f), disabled: f.file_type === 'Directory' },
                       { separator: true },
                       { label: 'Mover para Lixeira', icon: <Trash2 size={14} />, danger: true, onClick: () => handleMoveToTrash(f) }
                     ]);

@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
-import { Bell, X, CheckCircle, AlertTriangle, AlertCircle, Info } from 'lucide-react';
+import { Bell, X, CheckCircle, AlertTriangle, AlertCircle, Info, Volume2, Volume1, Volume, VolumeX } from 'lucide-react';
 
 // ============================================================
 // Clock Component - Memoized to avoid global re-renders
@@ -156,6 +156,71 @@ function ClockDashboard({ time, uptime, onClose }: { time: Date; uptime: number;
     </div>
   );
 }
+
+// ============================================================
+// Volume Control Component
+// ============================================================
+
+export const VolumeControl = memo(function VolumeControl() {
+  const [volume, setVolume] = useState(70);
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Close panel on click outside
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.volume-control-wrapper')) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const getVolumeIcon = () => {
+    if (volume === 0) return <VolumeX size={16} />;
+    if (volume < 33) return <Volume size={16} />;
+    if (volume < 66) return <Volume1 size={16} />;
+    return <Volume2 size={16} />;
+  };
+
+  return (
+    <div className="volume-control-wrapper">
+      <button 
+        className={`tray-item volume-button ${isOpen ? 'active' : ''}`}
+        onClick={() => setIsOpen(!isOpen)}
+        title={`Volume: ${volume}%`}
+      >
+        {getVolumeIcon()}
+      </button>
+
+      {isOpen && (
+        <div className="volume-panel">
+          <div className="volume-panel-header">
+            <span>Volume</span>
+            <span className="volume-value">{volume}%</span>
+          </div>
+          <div className="volume-slider-container">
+            <input 
+              type="range" 
+              className="volume-slider"
+              min="0" 
+              max="100" 
+              value={volume}
+              style={{ '--volume-percent': `${volume}%` } as any}
+              onChange={(e) => setVolume(parseInt(e.target.value))}
+            />
+          </div>
+          <div className="volume-icons">
+            <VolumeX size={14} className="muted-icon" onClick={() => setVolume(0)} />
+            <Volume2 size={14} className="max-icon" onClick={() => setVolume(100)} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
 
 // ============================================================
 // Notification System

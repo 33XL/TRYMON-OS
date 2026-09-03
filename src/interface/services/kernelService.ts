@@ -439,6 +439,17 @@ export function writeFile(path: string, content: string): boolean {
   }
 }
 
+export function writeBinaryFile(path: string, data: Uint8Array): boolean {
+  if (!_kernelReady) return false;
+  try {
+    rust.api_write_file(path, data);
+    return true;
+  } catch (e) {
+    console.error(`[KernelService] Failed to write binary file ${path}:`, e);
+    return false;
+  }
+}
+
 export function mount(path: string, source: string, fsType: string): void {
   assertReady();
   rust.api_mount(path, source, fsType);
