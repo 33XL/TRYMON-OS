@@ -33,14 +33,23 @@ interface HistoryItem {
   timestamp: number;
 }
 
-export default function BrowserApp() {
+export default function BrowserApp({
+  initialUrl,
+  onTitleChange,
+  onOpenNewWindow
+}: {
+  initialUrl?: string;
+  onTitleChange?: (title: string) => void;
+  onOpenNewWindow?: (appId: string, initialProps?: any) => void;
+} = {}) {
+  const startUrl = initialUrl || 'trymon://home';
   const [tabs, setTabs] = useState<Tab[]>([{
     id: crypto.randomUUID(),
-    url: 'trymon://home',
-    inputUrl: 'trymon://home',
-    title: 'Home',
+    url: startUrl,
+    inputUrl: startUrl,
+    title: startUrl === 'trymon://home' ? 'Home' : startUrl,
     isLoading: false,
-    history: ['trymon://home'],
+    history: [startUrl],
     historyIndex: 0
   }]);
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
@@ -48,13 +57,20 @@ export default function BrowserApp() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [fullHistory, setFullHistory] = useState<HistoryItem[]>([]);
 
+  const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId) || tabs[0], [tabs, activeTabId]);
+
+  // Update window title when active tab changes
+  useEffect(() => {
+    if (activeTab && onTitleChange) {
+      onTitleChange(`Navegador - ${activeTab.title || 'Trymon Browser'}`);
+    }
+  }, [activeTab?.title, onTitleChange]);
+
   // Recursion Depth Detection (Global to OS)
   const currentLayer = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return parseInt(params.get('layer') || '0', 10);
   }, []);
-
-  const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId) || tabs[0], [tabs, activeTabId]);
 
   // Load Persistence
   useEffect(() => {
@@ -221,15 +237,25 @@ export default function BrowserApp() {
             key={tab.id} 
             className={`browser-tab ${tab.id === activeTabId ? 'active' : ''}`}
             onClick={() => setActiveTabId(tab.id)}
+            title={`${tab.title} (Clique com botão direito para opções)`}
+            onContextMenu={(e) => {
+              if (onOpenNewWindow) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.confirm(`Abrir aba "${tab.title}" em uma nova janela?`)) {
+                  onOpenNewWindow('browser', { initialUrl: tab.url });
+                }
+              }
+            }}
           >
             <Globe size={14} />
             <span className="browser-tab-title">{tab.title}</span>
-            <button className="browser-tab-close" onClick={(e) => closeTab(tab.id, e)}>
+            <button className="browser-tab-close" onClick={(e) => closeTab(tab.id, e)} title="Fechar aba">
               <X size={12} />
             </button>
           </div>
         ))}
-        <button className="add-tab-btn" onClick={() => addTab()}>
+        <button className="add-tab-btn" onClick={() => addTab()} title="Nova Aba">
           <Plus size={18} />
         </button>
       </div>

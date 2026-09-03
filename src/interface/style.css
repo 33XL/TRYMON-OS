@@ -5324,3 +5324,163 @@ body {
 .neon-glow {
   filter: drop-shadow(0 0 8px rgba(0, 242, 255, 0.6));
 }
+
+/* ============================================================
+ * Multi-Tab & Multi-Instance UI Styles
+ * ============================================================ */
+
+/* FilesApp Tab Bar */
+.files-tabs-bar {
+  display: flex;
+  align-items: center;
+  background: rgba(18, 22, 28, 0.98);
+  border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+  padding: 4px 8px 0;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.files-tabs-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.files-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px 6px 0 0;
+  background: rgba(30, 35, 45, 0.4);
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  user-select: none;
+  transition: all 0.15s ease;
+  min-width: 110px;
+  max-width: 200px;
+}
+
+.files-tab:hover {
+  background: rgba(45, 52, 65, 0.6);
+  color: var(--text-primary);
+}
+
+.files-tab.active {
+  background: #0d1117;
+  color: var(--text-primary);
+  border-color: rgba(48, 54, 61, 0.8);
+  border-bottom: 1px solid #0d1117;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.files-tab-add {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 5px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.files-tab-add:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent-cyan);
+}
+
+/* EditorApp Tab Bar */
+.editor-tabs-bar {
+  display: flex;
+  align-items: center;
+  background: rgba(18, 22, 28, 0.98);
+  border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+  padding: 4px 8px 0;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.editor-tabs-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px 6px 0 0;
+  background: rgba(30, 35, 45, 0.4);
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  user-select: none;
+  transition: all 0.15s ease;
+  min-width: 110px;
+  max-width: 200px;
+}
+
+.editor-tab:hover {
+  background: rgba(45, 52, 65, 0.6);
+  color: var(--text-primary);
+}
+
+.editor-tab.active {
+  background: #0d1117;
+  color: var(--text-primary);
+  border-color: rgba(48, 54, 61, 0.8);
+  border-bottom: 1px solid #0d1117;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.editor-tab-add {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 5px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.editor-tab-add:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent-cyan);
+}
+
+/* Micro-interactions for tab closing */
+.tab-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: all 0.15s ease;
+}
+
+.tab-close:hover {
+  opacity: 1;
+  background: rgba(255, 123, 114, 0.2);
+  color: var(--accent-red);
+}
+

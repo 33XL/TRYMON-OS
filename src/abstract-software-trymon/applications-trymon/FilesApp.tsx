@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   FolderOpen, FileCode, ChevronRight, Home, 
   ArrowLeft, RefreshCw, Folder, Search, 
-  Grid, List as ListIcon, Menu as MenuIcon, 
+  Grid, List as ListIcon, 
   Monitor, FileText, Music, Video, Download, Upload, Image as ImageIcon,
-  FolderPlus, FilePlus, Edit3, Trash2
+  FolderPlus, FilePlus, Edit3, Trash2, Plus, X, ExternalLink
 } from 'lucide-react';
 import * as kernel from '../../interface/services/kernelService';
 import { ContextMenuItem } from '../../interface/components/ContextMenu';
@@ -17,78 +17,172 @@ interface FileEntry {
   size: number;
 }
 
-export default function FilesApp({ userName, onContextMenu, onOpenFile }: { 
-  userName: string,
-  onContextMenu: (e: React.MouseEvent, items: ContextMenuItem[]) => void,
-  onOpenFile?: (path: string) => void
+interface FilesTab {
+  id: string;
+  name: string;
+  currentPath: string;
+  history: string[];
+  historyIndex: number;
+  viewMode: 'grid' | 'list';
+  searchTerm: string;
+}
+
+export default function FilesApp({ 
+  userName, 
+  initialPath,
+  onContextMenu, 
+  onOpenFile,
+  onTitleChange,
+  onOpenNewWindow
+}: { 
+  userName: string;
+  initialPath?: string;
+  onContextMenu: (e: React.MouseEvent, items: ContextMenuItem[]) => void;
+  onOpenFile?: (path: string) => void;
+  onTitleChange?: (title: string) => void;
+  onOpenNewWindow?: (appId: string, initialProps?: any) => void;
 }) {
   const userHome = `/home/${userName}`;
-  const [currentPath, setCurrentPath] = useState(userHome);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const startPath = initialPath || userHome;
+
+  const createNewTab = useCallback((path = userHome): FilesTab => {
+    const folderName = path === '/' ? 'Raiz' : (path.split('/').pop() || 'Arquivos');
+    return {
+      id: crypto.randomUUID(),
+      name: folderName,
+      currentPath: path,
+      history: [path],
+      historyIndex: 0,
+      viewMode: 'grid',
+      searchTerm: ''
+    };
+  }, [userHome]);
+
+  const [tabs, setTabs] = useState<FilesTab[]>(() => [createNewTab(startPath)]);
+  const [activeTabId, setActiveTabId] = useState<string>(() => tabs[0]?.id || '');
   const [files, setFiles] = useState<FileEntry[]>([]);
-  const [history, setHistory] = useState<string[]>([userHome]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const [searchTerm, setSearchTerm] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingPath, setEditingPath] = useState<string | null>(null);
 
+  const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId) || tabs[0], [tabs, activeTabId]);
+
+  // Update window title when path or active tab changes
+  useEffect(() => {
+    if (activeTab && onTitleChange) {
+      const displayPath = activeTab.currentPath === userHome ? '~' : activeTab.currentPath;
+      onTitleChange(`Arquivos - ${displayPath}`);
+    }
+  }, [activeTab?.currentPath, userHome, onTitleChange]);
+
   const loadDirectory = useCallback((path: string) => {
-    console.log('[FilesApp] Loading directory:', path);
     try {
       const result = kernel.listDir(path);
-      console.log('[FilesApp] Got files:', result);
       setFiles(result);
     } catch (e) {
       console.error('[FilesApp] Failed to load directory:', path, e);
+      setFiles([]);
     }
   }, []);
 
   useEffect(() => {
-    loadDirectory(currentPath);
-  }, [currentPath, refreshKey, loadDirectory]);
+    if (activeTab) {
+      loadDirectory(activeTab.currentPath);
+    }
+  }, [activeTab?.currentPath, refreshKey, loadDirectory]);
 
   const refreshView = useCallback(() => {
-    console.log('[FilesApp] refreshView called, currentPath:', currentPath);
-    loadDirectory(currentPath);
+    if (activeTab) {
+      loadDirectory(activeTab.currentPath);
+    }
     setRefreshKey(prev => prev + 1);
-  }, [currentPath, loadDirectory]);
+  }, [activeTab, loadDirectory]);
+
+  const updateActiveTab = useCallback((updater: (tab: FilesTab) => FilesTab) => {
+    setTabs(prev => prev.map(t => t.id === activeTab.id ? updater(t) : t));
+  }, [activeTab?.id]);
 
   const navigateTo = (path: string, pushHistory = true) => {
     let normalized = path;
     if (normalized === '') normalized = '/';
+    const folderName = normalized === '/' ? 'Raiz' : (normalized.split('/').pop() || 'Pasta');
     
-    setCurrentPath(normalized);
-    setSearchTerm(''); // Reset search on navigation
-    
-    if (pushHistory) {
-      const newHistory = history.slice(0, historyIndex + 1);
-      newHistory.push(normalized);
-      setHistory(newHistory);
-      setHistoryIndex(newHistory.length - 1);
-    }
+    updateActiveTab(tab => {
+      let newHistory = tab.history;
+      let newHistoryIndex = tab.historyIndex;
+      
+      if (pushHistory) {
+        newHistory = tab.history.slice(0, tab.historyIndex + 1);
+        newHistory.push(normalized);
+        newHistoryIndex = newHistory.length - 1;
+      }
+      
+      return {
+        ...tab,
+        name: folderName,
+        currentPath: normalized,
+        searchTerm: '',
+        history: newHistory,
+        historyIndex: newHistoryIndex
+      };
+    });
   };
 
   const goBack = () => {
-    if (historyIndex > 0) {
-      const newIndex = historyIndex - 1;
-      setHistoryIndex(newIndex);
-      setCurrentPath(history[newIndex]);
+    if (activeTab.historyIndex > 0) {
+      const newIndex = activeTab.historyIndex - 1;
+      const targetPath = activeTab.history[newIndex];
+      const folderName = targetPath === '/' ? 'Raiz' : (targetPath.split('/').pop() || 'Pasta');
+      updateActiveTab(tab => ({
+        ...tab,
+        name: folderName,
+        currentPath: targetPath,
+        historyIndex: newIndex
+      }));
     }
   };
 
   const goForward = () => {
-    if (historyIndex < history.length - 1) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      setCurrentPath(history[newIndex]);
+    if (activeTab.historyIndex < activeTab.history.length - 1) {
+      const newIndex = activeTab.historyIndex + 1;
+      const targetPath = activeTab.history[newIndex];
+      const folderName = targetPath === '/' ? 'Raiz' : (targetPath.split('/').pop() || 'Pasta');
+      updateActiveTab(tab => ({
+        ...tab,
+        name: folderName,
+        currentPath: targetPath,
+        historyIndex: newIndex
+      }));
     }
+  };
+
+  const handleAddTab = (path?: string) => {
+    const targetPath = path || activeTab?.currentPath || userHome;
+    const newTab = createNewTab(targetPath);
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+  };
+
+  const handleCloseTab = (tabId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (tabs.length <= 1) return; // Keep at least one tab
+
+    setTabs(prev => {
+      const filtered = prev.filter(t => t.id !== tabId);
+      if (activeTabId === tabId) {
+        const closedIndex = prev.findIndex(t => t.id === tabId);
+        const nextActive = filtered[Math.max(0, closedIndex - 1)];
+        if (nextActive) {
+          setActiveTabId(nextActive.id);
+        }
+      }
+      return filtered;
+    });
   };
 
   const handleEntryClick = (entry: FileEntry) => {
     if (entry.file_type === 'Directory') {
       navigateTo(entry.path);
     } else {
-      console.log('[FilesApp] Opening file:', entry.path);
       if (onOpenFile) {
         onOpenFile(entry.path);
       }
@@ -135,16 +229,15 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
 
   const handleCreateFolder = () => {
     const defaultName = 'Nova Pasta';
-    const path = currentPath === '/' ? `/${defaultName}` : `${currentPath}/${defaultName}`;
+    const path = activeTab.currentPath === '/' ? `/${defaultName}` : `${activeTab.currentPath}/${defaultName}`;
     kernel.createDirectory(path);
     refreshView();
-    // Use a small timeout to allow the view to refresh before entering edit mode
     setTimeout(() => setEditingPath(path), 100);
   };
 
   const handleCreateFile = () => {
     const defaultName = 'novo_arquivo.txt';
-    const path = currentPath === '/' ? `/${defaultName}` : `${currentPath}/${defaultName}`;
+    const path = activeTab.currentPath === '/' ? `/${defaultName}` : `${activeTab.currentPath}/${defaultName}`;
     kernel.createFile(path);
     refreshView();
     setTimeout(() => setEditingPath(path), 100);
@@ -192,7 +285,7 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
         const reader = new FileReader();
         reader.onload = async (event) => {
           const buffer = event.target?.result as ArrayBuffer;
-          const path = currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`;
+          const path = activeTab.currentPath === '/' ? `/${file.name}` : `${activeTab.currentPath}/${file.name}`;
           kernel.writeBinaryFile(path, new Uint8Array(buffer));
           
           processed++;
@@ -225,7 +318,7 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
   };
 
   const breadcrumbs = useMemo(() => {
-    const parts = currentPath.split('/').filter(p => p !== '');
+    const parts = (activeTab?.currentPath || '/').split('/').filter(p => p !== '');
     const crumbs = [{ name: 'Raiz', path: '/', isRoot: true }];
     let accumulated = '';
     parts.forEach((p: string) => {
@@ -233,16 +326,15 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
       crumbs.push({ name: p, path: accumulated, isRoot: false });
     });
     return crumbs;
-  }, [currentPath]);
+  }, [activeTab?.currentPath]);
 
   const filteredFiles = useMemo(() => {
     let result = files;
-    if (searchTerm) {
-      result = files.filter((f: FileEntry) => f.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    if (activeTab?.searchTerm) {
+      result = files.filter((f: FileEntry) => f.name.toLowerCase().includes(activeTab.searchTerm.toLowerCase()));
     }
-    // Filter hidden files by default
     return result.filter(f => !f.name.startsWith('.'));
-  }, [files, searchTerm]);
+  }, [files, activeTab?.searchTerm]);
 
   const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -255,9 +347,13 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
   return (
     <div 
       className="files-window nautilus-style"
+      style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
       onContextMenu={(e) => {
         if (e.target === e.currentTarget || (e.target as HTMLElement).className.includes('files-main-view')) {
           onContextMenu(e, [
+            { label: 'Nova Aba', icon: <Plus size={14} />, onClick: () => handleAddTab() },
+            { label: 'Nova Janela de Arquivos', icon: <ExternalLink size={14} />, onClick: () => onOpenNewWindow && onOpenNewWindow('files') },
+            { separator: true },
             { label: 'Nova Pasta', icon: <FolderPlus size={14} />, onClick: handleCreateFolder },
             { label: 'Novo Arquivo', icon: <FilePlus size={14} />, onClick: handleCreateFile },
             { separator: true },
@@ -268,14 +364,107 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
         }
       }}
     >
+      {/* Tab Bar for FilesApp */}
+      <div className="files-tabs-bar" style={{
+        display: 'flex',
+        alignItems: 'center',
+        background: 'rgba(22, 27, 34, 0.98)',
+        borderBottom: '1px solid rgba(48, 54, 61, 0.6)',
+        padding: '4px 8px 0',
+        gap: '4px',
+        overflowX: 'auto',
+        flexShrink: 0
+      }}>
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTabId;
+          return (
+            <div
+              key={tab.id}
+              className={`files-tab ${isActive ? 'active' : ''}`}
+              onClick={() => setActiveTabId(tab.id)}
+              onContextMenu={(e) => {
+                e.stopPropagation();
+                onContextMenu(e, [
+                  { label: 'Nova Aba', icon: <Plus size={14} />, onClick: () => handleAddTab(tab.currentPath) },
+                  { label: 'Abrir em Nova Janela', icon: <ExternalLink size={14} />, onClick: () => onOpenNewWindow && onOpenNewWindow('files', { initialPath: tab.currentPath }) },
+                  { separator: true },
+                  { label: 'Fechar Aba', icon: <X size={14} />, disabled: tabs.length <= 1, onClick: () => handleCloseTab(tab.id) }
+                ]);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '6px 6px 0 0',
+                background: isActive ? '#0d1117' : 'rgba(30, 35, 45, 0.4)',
+                border: isActive ? '1px solid rgba(48, 54, 61, 0.8)' : '1px solid transparent',
+                borderBottom: isActive ? '1px solid #0d1117' : 'none',
+                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontSize: '12px',
+                userSelect: 'none',
+                transition: 'all 0.15s ease',
+                minWidth: '110px',
+                maxWidth: '200px'
+              }}
+              title={tab.currentPath}
+            >
+              <Folder size={13} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {tab.name}
+              </span>
+              {tabs.length > 1 && (
+                <button
+                  className="tab-close"
+                  onClick={(e) => handleCloseTab(tab.id, e)}
+                  title="Fechar aba"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    borderRadius: '3px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <X size={11} />
+                </button>
+              )}
+            </div>
+          );
+        })}
+
+        <button
+          className="files-tab-add"
+          onClick={() => handleAddTab()}
+          title="Nova Aba (Pasta Atual)"
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            padding: '5px 8px',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <Plus size={14} />
+        </button>
+      </div>
+
       {/* Nautilus Header Bar */}
       <div className="files-header-bar">
         <div className="header-left">
           <div className="nav-group">
-            <button className="nav-btn" disabled={historyIndex === 0} onClick={goBack} title="Voltar">
+            <button className="nav-btn" disabled={activeTab.historyIndex === 0} onClick={goBack} title="Voltar">
               <ArrowLeft size={16} />
             </button>
-            <button className="nav-btn" disabled={historyIndex >= history.length - 1} onClick={goForward} title="Avançar">
+            <button className="nav-btn" disabled={activeTab.historyIndex >= activeTab.history.length - 1} onClick={goForward} title="Avançar">
               <ChevronRight size={16} />
             </button>
           </div>
@@ -320,29 +509,43 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
             <input 
               type="text" 
               placeholder="Pesquisar..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={activeTab.searchTerm}
+              onChange={(e) => updateActiveTab(tab => ({ ...tab, searchTerm: e.target.value }))}
             />
           </div>
           <div className="view-group">
-            <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}>
+            <button 
+              className={`view-btn ${activeTab.viewMode === 'grid' ? 'active' : ''}`} 
+              onClick={() => updateActiveTab(tab => ({ ...tab, viewMode: 'grid' }))}
+            >
               <Grid size={16} />
             </button>
-            <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}>
+            <button 
+              className={`view-btn ${activeTab.viewMode === 'list' ? 'active' : ''}`} 
+              onClick={() => updateActiveTab(tab => ({ ...tab, viewMode: 'list' }))}
+            >
               <ListIcon size={16} />
             </button>
           </div>
           <button className="menu-btn" onClick={refreshView} title="Atualizar"><RefreshCw size={16} /></button>
-          <button className="menu-btn"><MenuIcon size={16} /></button>
+          <button className="menu-btn" onClick={() => handleAddTab()} title="Nova Aba"><Plus size={16} /></button>
         </div>
       </div>
 
-      <div className="files-layout-body">
+      <div className="files-layout-body" style={{ flexGrow: 1, minHeight: 0 }}>
         <div className="files-sidebar-nautilus">
           <div className="sidebar-group">
             <div 
-              className={`sidebar-item ${currentPath === userHome ? 'active' : ''}`} 
+              className={`sidebar-item ${activeTab.currentPath === userHome ? 'active' : ''}`} 
               onClick={() => navigateTo(userHome)}
+              onContextMenu={(e) => {
+                e.stopPropagation();
+                onContextMenu(e, [
+                  { label: 'Abrir', icon: <FolderOpen size={14} />, onClick: () => navigateTo(userHome) },
+                  { label: 'Abrir em Nova Aba', icon: <Plus size={14} />, onClick: () => handleAddTab(userHome) },
+                  { label: 'Abrir em Nova Janela', icon: <ExternalLink size={14} />, onClick: () => onOpenNewWindow && onOpenNewWindow('files', { initialPath: userHome }) }
+                ]);
+              }}
               onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, userHome)}
             >
               <Home size={16} /> <span>Pasta Pessoal</span>
@@ -351,46 +554,63 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
           
           <div className="sidebar-group">
             <h4>Favoritos</h4>
-            <div className={`sidebar-item ${currentPath === `${userHome}/Workspace` ? 'active' : ''}`} onClick={() => navigateTo(`${userHome}/Workspace`)} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, `${userHome}/Workspace`)}>
-              <Monitor size={16} /> <span>Workspace</span>
-            </div>
-            <div className={`sidebar-item ${currentPath === `${userHome}/Documents` ? 'active' : ''}`} onClick={() => navigateTo(`${userHome}/Documents`)} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, `${userHome}/Documents`)}>
-              <FileText size={16} /> <span>Documentos</span>
-            </div>
-            <div className={`sidebar-item ${currentPath === `${userHome}/Downloads` ? 'active' : ''}`} onClick={() => navigateTo(`${userHome}/Downloads`)} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, `${userHome}/Downloads`)}>
-              <Download size={16} /> <span>Downloads</span>
-            </div>
-            <div className={`sidebar-item ${currentPath === `${userHome}/Musics` ? 'active' : ''}`} onClick={() => navigateTo(`${userHome}/Musics`)} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, `${userHome}/Musics`)}>
-              <Music size={16} /> <span>Músicas</span>
-            </div>
-            <div className={`sidebar-item ${currentPath === `${userHome}/Videos` ? 'active' : ''}`} onClick={() => navigateTo(`${userHome}/Videos`)} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, `${userHome}/Videos`)}>
-              <Video size={16} /> <span>Vídeos</span>
-            </div>
-            <div className={`sidebar-item ${currentPath === `${userHome}/Pictures` ? 'active' : ''}`} onClick={() => navigateTo(`${userHome}/Pictures`)} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, `${userHome}/Pictures`)}>
-              <ImageIcon size={16} /> <span>Imagens</span>
-            </div>
-            <div className={`sidebar-item ${currentPath === `${userHome}/Desktop` ? 'active' : ''}`} onClick={() => navigateTo(`${userHome}/Desktop`)} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, `${userHome}/Desktop`)}>
-              <Monitor size={16} /> <span>Desktop</span>
-            </div>
+            {[
+              { name: 'Workspace', path: `${userHome}/Workspace`, icon: <Monitor size={16} /> },
+              { name: 'Documentos', path: `${userHome}/Documents`, icon: <FileText size={16} /> },
+              { name: 'Downloads', path: `${userHome}/Downloads`, icon: <Download size={16} /> },
+              { name: 'Músicas', path: `${userHome}/Musics`, icon: <Music size={16} /> },
+              { name: 'Vídeos', path: `${userHome}/Videos`, icon: <Video size={16} /> },
+              { name: 'Imagens', path: `${userHome}/Pictures`, icon: <ImageIcon size={16} /> },
+              { name: 'Desktop', path: `${userHome}/Desktop`, icon: <Monitor size={16} /> },
+            ].map(fav => (
+              <div 
+                key={fav.path}
+                className={`sidebar-item ${activeTab.currentPath === fav.path ? 'active' : ''}`} 
+                onClick={() => navigateTo(fav.path)}
+                onContextMenu={(e) => {
+                  e.stopPropagation();
+                  onContextMenu(e, [
+                    { label: `Abrir ${fav.name}`, icon: <FolderOpen size={14} />, onClick: () => navigateTo(fav.path) },
+                    { label: 'Abrir em Nova Aba', icon: <Plus size={14} />, onClick: () => handleAddTab(fav.path) },
+                    { label: 'Abrir em Nova Janela', icon: <ExternalLink size={14} />, onClick: () => onOpenNewWindow && onOpenNewWindow('files', { initialPath: fav.path }) }
+                  ]);
+                }}
+                onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, fav.path)}
+              >
+                {fav.icon} <span>{fav.name}</span>
+              </div>
+            ))}
           </div>
 
           <div className="sidebar-group">
             <h4>Sistema</h4>
-            <div className="sidebar-item" onClick={() => navigateTo('/')} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, '/')}>
-              <RefreshCw size={16} /> <span>Outros Locais</span>
+            <div 
+              className="sidebar-item" 
+              onClick={() => navigateTo('/')}
+              onContextMenu={(e) => {
+                e.stopPropagation();
+                onContextMenu(e, [
+                  { label: 'Abrir Raiz', icon: <FolderOpen size={14} />, onClick: () => navigateTo('/') },
+                  { label: 'Abrir em Nova Aba', icon: <Plus size={14} />, onClick: () => handleAddTab('/') },
+                  { label: 'Abrir em Nova Janela', icon: <ExternalLink size={14} />, onClick: () => onOpenNewWindow && onOpenNewWindow('files', { initialPath: '/' }) }
+                ]);
+              }}
+              onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e) => onDrop(e, '/')}
+            >
+              <RefreshCw size={16} /> <span>Outros Locais (Raiz)</span>
             </div>
-            <div className={`sidebar-item trash-target`} onClick={() => console.log('Open Trash App')} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDropTrash}>
+            <div className={`sidebar-item trash-target`} onClick={() => onOpenNewWindow && onOpenNewWindow('trash')} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDropTrash}>
               <Trash2 size={16} /> <span>Lixeira</span>
             </div>
           </div>
         </div>
 
         <div className="files-main-view">
-          <div className={`files-view-${viewMode}`}>
+          <div className={`files-view-${activeTab.viewMode}`}>
             {filteredFiles.length === 0 ? (
               <div className="empty-message">
                 <FolderOpen size={48} opacity={0.3} />
-                <p>{searchTerm ? 'Nenhum resultado encontrado' : 'Pasta vazia'}</p>
+                <p>{activeTab.searchTerm ? 'Nenhum resultado encontrado' : 'Pasta vazia'}</p>
               </div>
             ) : (
               filteredFiles.map(f => (
@@ -405,17 +625,31 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
                   onDoubleClick={() => handleEntryClick(f)}
                   onContextMenu={(e) => {
                     e.stopPropagation();
-                    onContextMenu(e, [
-                      { label: 'Abrir', icon: f.file_type === 'Directory' ? <FolderOpen size={14} /> : <FileCode size={14} />, onClick: () => handleEntryClick(f) },
-                      { label: 'Renomear', icon: <Edit3 size={14} />, onClick: () => handleRename(f) },
-                      { label: 'Exportar', icon: <Download size={14} />, onClick: () => handleExport(f), disabled: f.file_type === 'Directory' },
-                      { separator: true },
-                      { label: 'Mover para Lixeira', icon: <Trash2 size={14} />, danger: true, onClick: () => handleMoveToTrash(f) }
-                    ]);
+                    if (f.file_type === 'Directory') {
+                      onContextMenu(e, [
+                        { label: 'Abrir', icon: <FolderOpen size={14} />, onClick: () => handleEntryClick(f) },
+                        { label: 'Abrir em Nova Aba', icon: <Plus size={14} />, onClick: () => handleAddTab(f.path) },
+                        { label: 'Abrir em Nova Janela', icon: <ExternalLink size={14} />, onClick: () => onOpenNewWindow && onOpenNewWindow('files', { initialPath: f.path }) },
+                        { separator: true },
+                        { label: 'Renomear', icon: <Edit3 size={14} />, onClick: () => handleRename(f) },
+                        { separator: true },
+                        { label: 'Mover para Lixeira', icon: <Trash2 size={14} />, danger: true, onClick: () => handleMoveToTrash(f) }
+                      ]);
+                    } else {
+                      onContextMenu(e, [
+                        { label: 'Abrir', icon: <FileCode size={14} />, onClick: () => handleEntryClick(f) },
+                        { label: 'Abrir no Editor (Nova Janela)', icon: <ExternalLink size={14} />, onClick: () => onOpenNewWindow && onOpenNewWindow('editor', { filePath: f.path }) },
+                        { separator: true },
+                        { label: 'Renomear', icon: <Edit3 size={14} />, onClick: () => handleRename(f) },
+                        { label: 'Exportar', icon: <Download size={14} />, onClick: () => handleExport(f) },
+                        { separator: true },
+                        { label: 'Mover para Lixeira', icon: <Trash2 size={14} />, danger: true, onClick: () => handleMoveToTrash(f) }
+                      ]);
+                    }
                   }}
                 >
                   <div className="item-icon">
-                    {f.file_type === 'Directory' ? <Folder size={viewMode === 'grid' ? 56 : 24} /> : <FileCode size={viewMode === 'grid' ? 56 : 24} />}
+                    {f.file_type === 'Directory' ? <Folder size={activeTab.viewMode === 'grid' ? 56 : 24} /> : <FileCode size={activeTab.viewMode === 'grid' ? 56 : 24} />}
                   </div>
                   <div className="item-details">
                     {f.path === editingPath ? (
@@ -441,7 +675,7 @@ export default function FilesApp({ userName, onContextMenu, onOpenFile }: {
                     ) : (
                       <span className="item-name">{f.name}</span>
                     )}
-                    {viewMode === 'list' && <span className="item-size">{f.file_type === 'Directory' ? '--' : formatSize(f.size)}</span>}
+                    {activeTab.viewMode === 'list' && <span className="item-size">{f.file_type === 'Directory' ? '--' : formatSize(f.size)}</span>}
                   </div>
                 </div>
               ))
